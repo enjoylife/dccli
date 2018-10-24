@@ -27,7 +27,7 @@ type Compose struct {
 
 var (
 	defaultLogger   = log.New(os.Stdout, "compose: ", log.LstdFlags|log.Lshortfile)
-	composeUpRegexp = regexp.MustCompile(`(?m)docker start <-.*\('(.*)'\)`)
+	composeUpRegexp = regexp.MustCompile(`(?m)docker start <-.*\(u?'(.*)'\)`)
 )
 
 type internalCFG struct {
@@ -219,14 +219,19 @@ func runCmd(name string, args ...string) (string, error) {
 	// the output from docker is very noisy, therefore to aide in diagnosing
 	// the errors we only show the log lines which containing meaningful error messages
 	scanner := bufio.NewScanner(bytes.NewReader(outBuf.Bytes()))
+	errCount := 0
 	for scanner.Scan() {
 		if strings.HasPrefix(scanner.Text(), "ERROR:") ||
 			strings.HasPrefix(scanner.Text(), "compose.cli.errors") {
+			errCount++
 			err = combineErr(err, errors.New(scanner.Text()))
 		}
 	}
 	if errScan := scanner.Err(); errScan != nil {
 		err = combineErr(err, fmt.Errorf("could not output error lines: %s", errScan))
+	}
+	if errCount == 0 {
+		err = combineErr(err, errors.New(out))
 	}
 
 	return out, err

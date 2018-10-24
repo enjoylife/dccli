@@ -23,7 +23,7 @@ test_postgres:
 `
 
 var cfg = Config{
-	Version: "3.7",
+	Version: "3",
 	Services: map[string]Service{
 		"pg": {
 			//ContainerName: "pg",
