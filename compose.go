@@ -193,7 +193,10 @@ func MustStart(opts ...Option) *Compose {
 // Cleanup will try and kill then remove any running containers for the current configuration.
 func (c *Compose) Cleanup() error {
 	c.logger.Println("removing stale containers...")
-	return combineErr(composeKill(c.fileName, c.projectName), composeRm(c.fileName, c.projectName))
+	netName := strings.ToLower(c.projectName) + "_default"
+	return combineErr(composeKill(c.fileName, c.projectName),
+		composeRm(c.fileName, c.projectName),
+		composeRMNetwork(netName))
 }
 
 // MustCleanup is like Cleanup, but panics on error.
@@ -253,8 +256,25 @@ func composeRm(fName string, pName string) error {
 	return nil
 }
 
+func composeRMNetwork(netName string) error {
+	//out, err := dockerRun("network", "inspect", netName)
+	//if strings.Contains(out,"No such network") {
+	//	return nil
+	//}
+	//defaultLogger.Println(out)
+	out, err := dockerRun("network", "rm", netName)
+	if err != nil {
+		return fmt.Errorf("compose: error removing network %s: %s, %v", netName, out, err)
+	}
+	return nil
+}
+
 func composeRun(fName string, projectName string, otherArgs ...string) (string, error) {
 	args := []string{"-f", fName, "-p", projectName}
 	args = append(args, otherArgs...)
 	return runCmd("docker-compose", args...)
+}
+
+func dockerRun(cmdAndArgs ...string) (string, error) {
+	return runCmd("docker", cmdAndArgs...)
 }

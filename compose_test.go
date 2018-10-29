@@ -8,31 +8,19 @@ import (
 	"testing"
 )
 
-var goodYML = `
-test_mockserver:
-  container_name: ms
-  image: ubuntu:trusty
-  ports:
-    - "10000:1080"
-    - "1090"
-test_postgres:
-  container_name: pg
-  image: postgres
-  ports:
-    - "5432"
-`
-
 var cfg = Config{
 	Version: "3",
 	Services: map[string]Service{
-		"pg": {
-			//ContainerName: "pg",
-			Image: "postgres",
-			Ports: []string{"5432"},
+		"mysql": {
+			Image: "mysql:5.7",
+			Ports: []string{"3306"},
+			Environment: map[string]string{
+				"MYSQL_ROOT_PASSWORD": "root",
+				"MYSQL_DATABASE":      "test",
+			},
 		},
 		"ms": {
 			Image: "ubuntu:trusty",
-			//ContainerName: "ms",
 			Ports: []string{"3000", "1090"},
 			Command: []string{"python3", "-c", `import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -60,12 +48,11 @@ func TestGoodYML(t *testing.T) {
 		OptionWithLogger(defaultLogger),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
-
 	if c.Containers["ms"].Name != "/testgoodyml_ms_1" {
-		t.Fatalf("found name '%v', expected '/ms", c.Containers["ms"].Name)
+		t.Errorf("found name '%v', expected '/ms", c.Containers["ms"].Name)
 	}
-	if c.Containers["pg"].Name != "/testgoodyml_pg_1" {
-		t.Fatalf("found name '%v', expected '/pg", c.Containers["pg"].Name)
+	if c.Containers["mysql"].Name != "/testgoodyml_mysql_1" {
+		t.Errorf("found name '%v', expected '/mysql", c.Containers["mysql"].Name)
 	}
 	//if port := compose.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"); port != 10000 {
 	//	t.Fatalf("found port %v, expected 10000", port)
@@ -103,7 +90,6 @@ func TestMustConnectWithDefaults(t *testing.T) {
 	c := MustStart(OptionWithCompose(cfg),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
-
 	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 
 	MustConnectWithDefaults(func() error {
