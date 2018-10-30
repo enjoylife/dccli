@@ -193,7 +193,9 @@ func MustStart(opts ...Option) *Compose {
 // Cleanup will try and kill then remove any running containers for the current configuration.
 func (c *Compose) Cleanup() error {
 	c.logger.Println("removing stale containers...")
-	netName := strings.ToLower(c.projectName) + "_default"
+	// cleaning based on docker network normalization, which lowercases everything
+	// and strips out all underscores
+	netName := strings.Replace(strings.ToLower(c.projectName), "_", "", -1) + "_default"
 	return combineErr(composeKill(c.fileName, c.projectName),
 		composeRm(c.fileName, c.projectName),
 		composeRMNetwork(netName), dockerRMVolumes())
