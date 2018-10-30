@@ -196,7 +196,7 @@ func (c *Compose) Cleanup() error {
 	netName := strings.ToLower(c.projectName) + "_default"
 	return combineErr(composeKill(c.fileName, c.projectName),
 		composeRm(c.fileName, c.projectName),
-		composeRMNetwork(netName))
+		composeRMNetwork(netName), dockerRMVolumes())
 }
 
 // MustCleanup is like Cleanup, but panics on error.
@@ -265,6 +265,14 @@ func composeRMNetwork(netName string) error {
 	out, err := dockerRun("network", "rm", netName)
 	if err != nil {
 		return fmt.Errorf("compose: error removing network %s: %s, %v", netName, out, err)
+	}
+	return nil
+}
+
+func dockerRMVolumes() error {
+	out, err := dockerRun("volume", "prune", "-f")
+	if err != nil {
+		return fmt.Errorf("compose: error removing volumes: %s, %v", out, err)
 	}
 	return nil
 }
