@@ -2,6 +2,7 @@ package dccli
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"os"
 	"sync"
@@ -46,8 +47,10 @@ func TestGoodYML(t *testing.T) {
 	c := MustStart(OptionWithCompose(cfg),
 		OptionWithProjectName("TestGoodYML"),
 		OptionWithLogger(defaultLogger),
+		OptionStartRetries(2),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
+	require.NotNil(t, c.Containers)
 	if c.Containers["ms"].Name != "/testgoodyml_ms_1" {
 		t.Errorf("found name '%v', expected '/ms", c.Containers["ms"].Name)
 	}
@@ -59,7 +62,7 @@ func TestGoodYML(t *testing.T) {
 	//}
 }
 
-func TestRestartGoodYML(t *testing.T) {
+func TestRestart(t *testing.T) {
 	TestGoodYML(t)
 }
 
@@ -87,19 +90,26 @@ func TestMustInferDockerHost(t *testing.T) {
 }
 
 func TestMustConnectWithDefaults(t *testing.T) {
-	c := MustStart(OptionWithCompose(cfg),
+	usedCFG := cfg
+	c := MustStart(OptionWithCompose(usedCFG),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
+	require.NotNil(t, c.Containers)
+	require.NotNil(t, c.Containers["ms"])
 	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
-
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	MustConnectWithDefaults(func() error {
 		defaultLogger.Print("attempting to connect to mockserver...", mockServerURL)
 		_, err := http.Get(mockServerURL)
 		if err == nil {
+			wg.Done()
 			defaultLogger.Print("connected to mockserver")
 		}
 		return err
 	})
+
+	wg.Wait()
 }
 
 func TestInspectUnknownContainer(t *testing.T) {
@@ -115,8 +125,8 @@ func TestMustInspect(t *testing.T) {
 	defer c.MustCleanup()
 
 	ms := MustInspect(c.Containers["ms"].ID)
-	if ms.Name != "/default_ms_1" {
-		t.Errorf("found '%v', expected '/default_ms_1", ms.Name)
+	if ms.Name != "/dccli_ms_1" {
+		t.Errorf("found '%v', expected '/dccli_ms_1", ms.Name)
 	}
 }
 

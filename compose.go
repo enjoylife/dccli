@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Compose is the main type exported by the package, used to interact with a running Docker Compose configuration.
@@ -31,11 +32,12 @@ var (
 )
 
 type internalCFG struct {
-	forcePull   bool
-	rmFirst     bool
-	compose     Config
-	projectName string
-	logger      *log.Logger
+	forcePull    bool
+	rmFirst      bool
+	compose      Config
+	projectName  string
+	logger       *log.Logger
+	connectTries int
 }
 
 // Option is the type used for defining optional configuration
@@ -76,12 +78,20 @@ func OptionWithLogger(l *log.Logger) Option {
 	}
 }
 
+// OptionStartRetries sets the number of times to retry the starting docker-compose
+func OptionStartRetries(count int) Option {
+	return func(c *internalCFG) {
+		c.connectTries = count
+	}
+}
+
 // Start starts a Docker Compose configuration.
 // TODO(mclemens) accept an io.Reader or a set of options
 func Start(opts ...Option) (*Compose, error) {
 	cfg := internalCFG{
-		projectName: "default", //randStringBytes(8),
-		logger:      defaultLogger,
+		projectName:  "dccli",
+		logger:       defaultLogger,
+		connectTries: 3,
 	}
 
 	for _, opt := range opts {
@@ -134,16 +144,22 @@ func Start(opts ...Option) (*Compose, error) {
 	}
 
 	cfg.logger.Println("starting containers...")
-	out, err := composeRun(fName, cfg.projectName, "--verbose", "up", "-d")
+	var ids []string
+	err = Connect(cfg.connectTries, time.Second*2, func() error {
+		out, err := composeRun(fName, cfg.projectName, "--verbose", "up", "-d")
+		if err != nil {
+			return err
+		}
+		cfg.logger.Println("containers started")
+
+		matches := composeUpRegexp.FindAllStringSubmatch(out, -1)
+		for _, match := range matches {
+			ids = append(ids, match[1])
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("compose: error starting containers: %v", err)
-	}
-	cfg.logger.Println("containers started")
-
-	matches := composeUpRegexp.FindAllStringSubmatch(out, -1)
-	ids := make([]string, 0, len(matches))
-	for _, match := range matches {
-		ids = append(ids, match[1])
 	}
 
 	containers := make(map[string]*ContainerInfo)
@@ -192,13 +208,14 @@ func MustStart(opts ...Option) *Compose {
 
 // Cleanup will try and kill then remove any running containers for the current configuration.
 func (c *Compose) Cleanup() error {
-	c.logger.Println("removing stale containers...")
+	c.logger.Println("removing stale containers, images, volumes, and networks...")
 	// cleaning based on docker network normalization, which lowercases everything
 	// and strips out all underscores
 	netName := strings.Replace(strings.ToLower(c.projectName), "_", "", -1) + "_default"
 	return combineErr(composeKill(c.fileName, c.projectName),
 		composeRm(c.fileName, c.projectName),
-		composeRMNetwork(netName), dockerRMVolumes())
+		composeRMNetwork(netName),
+		dockerPrune())
 }
 
 // MustCleanup is like Cleanup, but panics on error.
@@ -259,22 +276,29 @@ func composeRm(fName string, pName string) error {
 }
 
 func composeRMNetwork(netName string) error {
-	//out, err := dockerRun("network", "inspect", netName)
-	//if strings.Contains(out,"No such network") {
-	//	return nil
-	//}
-	//defaultLogger.Println(out)
-	out, err := dockerRun("network", "rm", netName)
+	var out string
+	err := Connect(3, time.Second*2, func() error {
+		o, err := dockerRun("network", "rm", netName)
+		out = o
+		return err
+	})
+
 	if err != nil {
 		return fmt.Errorf("compose: error removing network %s: %s, %v", netName, out, err)
 	}
 	return nil
 }
 
-func dockerRMVolumes() error {
-	out, err := dockerRun("volume", "prune", "-f")
+func dockerPrune() error {
+	var out string
+	err := Connect(3, time.Second*2, func() error {
+		o, err := dockerRun("volume", "prune", "-f")
+		out = o
+		return err
+	})
+
 	if err != nil {
-		return fmt.Errorf("compose: error removing volumes: %s, %v", out, err)
+		return fmt.Errorf("compose: error system prune: %s, %v", out, err)
 	}
 	return nil
 }
