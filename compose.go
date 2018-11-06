@@ -163,7 +163,9 @@ func Start(opts ...Option) (*Compose, error) {
 
 		matches := composeUpRegexp.FindAllStringSubmatch(out, -1)
 		for _, match := range matches {
-			ids = append(ids, match[1])
+			if match[1] != "" {
+				ids = append(ids, match[1])
+			}
 		}
 		return nil
 	})

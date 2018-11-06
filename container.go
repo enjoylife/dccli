@@ -57,7 +57,7 @@ type PortBinding struct {
 func Inspect(id string) (*ContainerInfo, error) {
 	out, err := runCmd("docker", "inspect", id)
 	if err != nil {
-		return nil, fmt.Errorf("compose: error inspecting container: %v", err)
+		return nil, fmt.Errorf("compose: error inspecting container: %s: %v",id, err)
 	}
 
 	var inspect []*ContainerInfo
