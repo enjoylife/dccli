@@ -24,6 +24,7 @@ type Compose struct {
 	fileName    string
 	projectName string
 	logger      *log.Logger
+	cfg         internalCFG
 }
 
 var (
@@ -38,6 +39,7 @@ type internalCFG struct {
 	projectName  string
 	logger       *log.Logger
 	connectTries int
+	keeparound   bool
 }
 
 // Option is the type used for defining optional configuration
@@ -54,6 +56,13 @@ func OptionForcePull(b bool) Option {
 func OptionRMFirst(b bool) Option {
 	return func(c *internalCFG) {
 		c.rmFirst = b
+	}
+}
+
+// If OptionKeepAround is true, it will not remove the containers after cleanup
+func OptionKeepAround(b bool) Option {
+	return func(c *internalCFG) {
+		c.keeparound = b
 	}
 }
 
@@ -182,7 +191,7 @@ func Start(opts ...Option) (*Compose, error) {
 		}
 		containers[key] = container
 	}
-	c := &Compose{fileName: fName, Containers: containers, projectName: cfg.projectName, logger: cfg.logger}
+	c := &Compose{fileName: fName, Containers: containers, projectName: cfg.projectName, logger: cfg.logger, cfg: cfg}
 	c.logger.Println("done initializing...")
 
 	return c, nil
@@ -208,6 +217,9 @@ func MustStart(opts ...Option) *Compose {
 
 // Cleanup will try and kill then remove any running containers for the current configuration.
 func (c *Compose) Cleanup() error {
+	if c.cfg.keeparound {
+		return nil
+	}
 	c.logger.Println("removing stale containers, images, volumes, and networks...")
 	// cleaning based on docker network normalization, which lowercases everything
 	// and strips out all underscores

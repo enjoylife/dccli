@@ -24,13 +24,13 @@ type Service struct {
 	Entrypoint string   `yaml:"entrypoint,omitempty"`
 	Networks   []string `yaml:"networks,omitempty"`
 	//Expose        []string    `yaml:"expose,omitempty"`
-	Hostname    string            `yaml:"hostname,omitempty"`
-	Ports       []string          `yaml:"ports,omitempty"`
-	Volumes     []string          `yaml:"volumes,omitempty"`
-	Command     []string          `yaml:"command,omitempty"`
-	HealthCheck HealthCheck       `yaml:"healthcheck,omitempty"`
-	DependsOn   []string          `yaml:"depends_on,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
+	Hostname    string      `yaml:"hostname,omitempty"`
+	Ports       []string    `yaml:"ports,omitempty"`
+	Volumes     []string    `yaml:"volumes,omitempty"`
+	Command     []string    `yaml:"command,omitempty"`
+	HealthCheck HealthCheck `yaml:"healthcheck,omitempty"`
+	DependsOn   []string    `yaml:"depends_on,omitempty"`
+	Environment []string    `yaml:"environment,omitempty"`
 }
 
 type HealthCheck struct {

@@ -3,6 +3,7 @@ package dccli
 import (
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 	"net/http"
 	"os"
 	"sync"
@@ -15,9 +16,9 @@ var cfg = Config{
 		"mysql": {
 			Image: "mysql:5.7",
 			Ports: []string{"3306"},
-			Environment: map[string]string{
-				"MYSQL_ROOT_PASSWORD": "root",
-				"MYSQL_DATABASE":      "test",
+			Environment: []string{
+				"MYSQL_ROOT_PASSWORD=root",
+				"MYSQL_DATABASE=test",
 			},
 		},
 		"ms": {
@@ -166,5 +167,57 @@ func TestParallelMustConnectWithDefaults(t *testing.T) {
 	})
 
 	wg.Wait()
+
+}
+
+func TestComplexDepends(t *testing.T) {
+	fileOut :=
+		`
+version: '3'
+services:
+  cassandra:
+    image: cassandra:3.11
+    ports:
+    - "9042:9042"
+  statsd:
+    image: hopsoft/graphite-statsd
+    ports:
+    - "8080:80"
+    - "2003:2003"
+    - "8125:8125"
+    - "8126:8126"
+  cadence:
+    image: ubercadence/server:0.4.0
+    ports:
+    - "7933:7933"
+    - "7934:7934"
+    - "7935:7935"
+    environment:
+    - "CASSANDRA_SEEDS=cassandra"
+    - "STATSD_ENDPOINT=statsd:8125"
+    depends_on:
+    - cassandra
+    - statsd
+  cadence-web:
+    image: ubercadence/web:3.1.2
+    environment:
+    - "CADENCE_TCHANNEL_PEERS=cadence:7933"
+    ports:
+    - "8088:8088"
+    depends_on:
+    - cadence
+`
+
+	var cfg Config
+	err := yaml.Unmarshal([]byte(fileOut), &cfg)
+	require.NoError(t, err)
+
+	c := MustStart(OptionWithCompose(cfg),
+		OptionWithProjectName(t.Name()),
+		OptionWithLogger(defaultLogger),
+		OptionStartRetries(2),
+		OptionForcePull(true), OptionKeepAround(true))
+	defer c.MustCleanup()
+	require.NotNil(t, c.Containers)
 
 }

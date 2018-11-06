@@ -9,7 +9,8 @@ import (
 
 func TestStruct(t *testing.T) {
 	fileOut :=
-		`version: '3.7'
+		`
+version: '3'
 services:
   nats:
     image: 'nats:0.8.0'
@@ -70,4 +71,48 @@ networks:
 
 	assert.Contains(t, tgSvc.DependsOn, "nats")
 
+}
+
+func TestDependsOn(t *testing.T) {
+
+	fileOut :=
+		`
+version: '3'
+services:
+  cassandra:
+    image: cassandra:3.11
+    ports:
+    - "9042:9042"
+  statsd:
+    image: hopsoft/graphite-statsd
+    ports:
+    - "8080:80"
+    - "2003:2003"
+    - "8125:8125"
+    - "8126:8126"
+  cadence:
+    image: ubercadence/server:0.4.0
+    ports:
+    - "7933:7933"
+    - "7934:7934"
+    - "7935:7935"
+    environment:
+    - "CASSANDRA_SEEDS=cassandra"
+    - "STATSD_ENDPOINT=statsd:8125"
+    depends_on:
+    - cassandra
+    - statsd
+  cadence-web:
+    image: ubercadence/web:3.1.2
+    environment:
+    - "CADENCE_TCHANNEL_PEERS=cadence:7933"
+    ports:
+    - "8088:8088"
+    depends_on:
+    - cadence
+`
+
+	var cfg Config
+	err := yaml.Unmarshal([]byte(fileOut), &cfg)
+	require.NoError(t, err)
 }
