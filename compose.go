@@ -29,7 +29,7 @@ type Compose struct {
 
 var (
 	defaultLogger   = log.New(os.Stdout, "compose: ", log.LstdFlags|log.Lshortfile)
-	composeUpRegexp = regexp.MustCompile(`(?m)docker start <-.*\(u?'(.*)'\)`)
+	composeUpRegexp = regexp.MustCompile(`(?m)docker start|inspect_container <-.*\(u?'(.*)'\)`)
 )
 
 type internalCFG struct {
