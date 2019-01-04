@@ -9,8 +9,7 @@ import (
 
 func TestStruct(t *testing.T) {
 	fileOut :=
-		`
-version: '3'
+		`version: '3.7'
 services:
   nats:
     image: 'nats:0.8.0'
@@ -115,4 +114,40 @@ services:
 	var cfg Config
 	err := yaml.Unmarshal([]byte(fileOut), &cfg)
 	require.NoError(t, err)
+}
+
+func TestVolumes(t *testing.T) {
+	const yamlSource = `
+version: "3.7"
+services:
+  web:
+    image: 'nginx:alpine'
+    volumes:
+      - type: volume
+        source: mydata
+        target: /data
+        volume:
+          nocopy: true
+      - type: bind
+        source: ./static
+        target: /opt/app/static
+  db:
+    image: postgres:latest
+    volumes:
+      - "/var/run/postgres/postgres.sock:/var/run/postgres/postgres.sock"
+      - "dbdata:/var/lib/postgresql/data"
+volumes:
+  mydata:
+  dbdata:
+`
+
+	var cfg Config
+	err := yaml.Unmarshal([]byte(yamlSource), &cfg)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, cfg.Volumes)
+
+	_, err = yaml.Marshal(cfg)
+	require.NoError(t, err)
+
 }

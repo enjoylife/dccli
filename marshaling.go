@@ -1,10 +1,15 @@
 package dccli
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Config struct {
-	Version  string              `yaml:"version,omitempty"`
-	Networks map[string]*Network `yaml:"networks,omitempty"`
-	//Volumes  map[string]volume  `yaml:"volumes"`
-	Services map[string]Service `yaml:"services,omitempty"`
+	Version  string                 `yaml:"version,omitempty"`
+	Networks map[string]*Network    `yaml:"networks,omitempty"`
+	Volumes  map[string]interface{} `yaml:"volumes,omitempty"`
+	Services map[string]Service     `yaml:"services,omitempty"`
 }
 
 type Network struct {
@@ -13,9 +18,53 @@ type Network struct {
 	//DriverOpts map[string]string "driver_opts"
 }
 
-//type volume struct {
-//	Driver, External string
-//	DriverOpts       map[string]string "driver_opts"
+type Volume struct {
+	Source     string                 `yaml:"source,omitempty"`
+	Target     string                 `yaml:"target,omitempty"`
+	Driver     string                 `yaml:"driver,omitempty"`
+	External   string                 `yaml:"external,omitempty"`
+	Type       string                 `yaml:"type,omitempty"`
+	DriverOpts map[string]string      `yaml:"services,omitempty"`
+	Volume     map[string]interface{} `yaml:"volume,omitempty"`
+}
+
+type volToMarshal struct {
+	Source     string                 `yaml:"source,omitempty"`
+	Target     string                 `yaml:"target,omitempty"`
+	Driver     string                 `yaml:"driver,omitempty"`
+	External   string                 `yaml:"external,omitempty"`
+	Type       string                 `yaml:"type,omitempty"`
+	DriverOpts map[string]string      `yaml:"services,omitempty"`
+	Volume     map[string]interface{} `yaml:"volume,omitempty"`
+}
+
+func (v *Volume) UnmarshalYAML(unmarshal func(interface{}) error) error {
+
+	// try to unmarshal into the old style first, allowing
+	var old string
+	if err := unmarshal(&old); err == nil {
+		strs := strings.Split(old, ":")
+		if len(strs) != 2 {
+			return fmt.Errorf("invalid format: %s", old)
+		}
+		v.Source = strs[0]
+		v.Target = strs[1]
+		return nil
+	}
+
+	vCopy := volToMarshal{}
+	if err := unmarshal(&vCopy); err == nil {
+		*v = Volume(vCopy)
+		return nil
+	}
+	return fmt.Errorf("could not unmarshal into volumes")
+}
+
+//func (v Volume) MarshalYAML() (interface{}, error) {
+//	if v.oldStyle != "" {
+//		return v.oldStyle, nil
+//	}
+//	return v.VolumeLongSyntax, nil
 //}
 
 type Service struct {
@@ -26,7 +75,7 @@ type Service struct {
 	//Expose        []string    `yaml:"expose,omitempty"`
 	Hostname    string      `yaml:"hostname,omitempty"`
 	Ports       []string    `yaml:"ports,omitempty"`
-	Volumes     []string    `yaml:"volumes,omitempty"`
+	Volumes     []*Volume   `yaml:"volumes,omitempty"`
 	Command     []string    `yaml:"command,omitempty"`
 	HealthCheck HealthCheck `yaml:"healthcheck,omitempty"`
 	DependsOn   []string    `yaml:"depends_on,omitempty"`
