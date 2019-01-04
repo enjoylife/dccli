@@ -154,7 +154,7 @@ func Start(opts ...Option) (*Compose, error) {
 
 	cfg.logger.Println("starting containers...")
 	var ids []string
-	err = Connect(cfg.connectTries, time.Second*2, func() error {
+	err = connect(cfg.connectTries, time.Second*2, func() error {
 		out, err := composeRun(fName, cfg.projectName, "--verbose", "up", "-d")
 		if err != nil {
 			return err
@@ -239,6 +239,28 @@ func (c *Compose) MustCleanup() {
 	}
 }
 
+// Connect
+func (c *Compose) Connect(policy RetryPolicy, connectFunc func() error) error {
+	var err error
+	var tryAgain bool
+	var wait time.Duration
+
+	for {
+		err = connectFunc()
+		if err == nil {
+			return nil
+		}
+
+		tryAgain, wait = policy.AttemptAgain(err)
+		if !tryAgain {
+			return err
+		}
+		c.logger.Printf("connect failed, retrying in %d second(s): %v\n", int64(wait.Seconds()), err)
+		time.Sleep(wait)
+
+	}
+}
+
 func runCmd(name string, args ...string) (string, error) {
 	var outBuf bytes.Buffer
 
@@ -291,7 +313,7 @@ func composeRm(fName string, pName string) error {
 
 func composeRMNetwork(netName string) error {
 	var out string
-	err := Connect(3, time.Second*2, func() error {
+	err := connect(3, time.Second*2, func() error {
 		o, err := dockerRun("network", "rm", netName)
 		out = o
 		return err
@@ -305,7 +327,7 @@ func composeRMNetwork(netName string) error {
 
 func dockerPrune() error {
 	var out string
-	err := Connect(3, time.Second*2, func() error {
+	err := connect(3, time.Second*2, func() error {
 		o, err := dockerRun("volume", "prune", "-f")
 		out = o
 		return err

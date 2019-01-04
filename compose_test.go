@@ -2,12 +2,13 @@ package dccli
 
 import (
 	"fmt"
+	"github.com/gocql/gocql"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 	"net/http"
 	"os"
 	"sync"
 	"testing"
+	"time"
 )
 
 var cfg = Config{
@@ -81,8 +82,8 @@ func TestMustInferDockerHost(t *testing.T) {
 	defer os.Setenv("DOCKER_HOST", envHost)
 
 	os.Setenv("DOCKER_HOST", "")
-	if host := MustInferDockerHost(); host != "localhost" {
-		t.Errorf("found '%v', expected 'localhost'", host)
+	if host := MustInferDockerHost(); host != "127.0.0.1" {
+		t.Errorf("found '%v', expected '127.0.0.1'", host)
 	}
 	os.Setenv("DOCKER_HOST", "tcp://192.168.99.100:2376")
 	if host := MustInferDockerHost(); host != "192.168.99.100" {
@@ -98,19 +99,49 @@ func TestMustConnectWithDefaults(t *testing.T) {
 	require.NotNil(t, c.Containers)
 	require.NotNil(t, c.Containers["ms"])
 	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	MustConnectWithDefaults(func() error {
+	err := c.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
 		defaultLogger.Print("attempting to connect to mockserver...", mockServerURL)
 		_, err := http.Get(mockServerURL)
 		if err == nil {
-			wg.Done()
 			defaultLogger.Print("connected to mockserver")
 		}
 		return err
 	})
+	require.NoError(t, err)
+}
 
-	wg.Wait()
+func TestPolicyBadConnect(t *testing.T) {
+	c := MustStart(OptionWithCompose(cfg),
+		OptionForcePull(true), OptionRMFirst(true))
+	defer c.MustCleanup()
+
+	//mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
+	badMockServerURL := fmt.Sprintf("http://%v/:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(1090, "tcp"))
+
+	retries := 3
+	actualTries := 0
+	err := c.Connect(&SimpleRetryPolicy{
+		NumRetries: retries,
+		Wait:       time.Second * 1,
+	}, func() error {
+		defaultLogger.Print("attempting bad connect to mockserver. Should fail...", badMockServerURL)
+		actualTries++
+		_, err := http.Get(badMockServerURL)
+		if err == nil {
+			t.Fatal("should not have connected!")
+		}
+		return err
+	})
+
+	if err == nil {
+		t.Errorf("should have failed to connect")
+	}
+
+	shouldHaveAttempted := retries + 1
+
+	if shouldHaveAttempted != actualTries {
+		t.Errorf("should have made the correct number of attempts %d != %d", shouldHaveAttempted, actualTries)
+	}
 }
 
 func TestInspectUnknownContainer(t *testing.T) {
@@ -131,6 +162,50 @@ func TestMustInspect(t *testing.T) {
 	}
 }
 
+func TestScyllaDB(t *testing.T) {
+
+	var cfgDB = Config{
+		Version: "3.7",
+		Services: map[string]Service{
+			"scylla": {
+				Image:   "scylladb/scylla:2.3.1",
+				Ports:   []string{"7000", "7001", "7199", "9042", "9160"},
+				Command: []string{"--smp=1", "--developer-mode=1", "--overprovisioned=1"},
+				Volumes: []*Volume{
+					{
+						Target: "/var/lib/scylla/",
+						Type:   "tmpfs",
+					},
+				},
+			},
+		},
+	}
+
+	c := MustStart(OptionWithCompose(cfgDB),
+		OptionForcePull(true), OptionRMFirst(true))
+	defer c.MustCleanup()
+
+	err := c.Connect(&SimpleRetryPolicy{
+		NumRetries: 7,
+		Wait:       time.Second * 3,
+	}, func() error {
+
+		b := gocql.NewCluster(MustInferDockerHost())
+		b.ProtoVersion = 4
+		b.Keyspace = "system"
+		b.DisableInitialHostLookup = true
+		b.Compressor = &gocql.SnappyCompressor{}
+		b.Port = int(c.Containers["scylla"].MustGetFirstPublicPort(9042, "tcp"))
+
+		_, err := b.CreateSession()
+		return err
+	})
+
+	if err != nil {
+		t.Errorf("should have connected")
+	}
+}
+
 func TestParallelMustConnectWithDefaults(t *testing.T) {
 
 	compose1 := MustStart(OptionWithCompose(cfg), OptionWithProjectName("compose1"),
@@ -144,80 +219,35 @@ func TestParallelMustConnectWithDefaults(t *testing.T) {
 
 	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose1.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 
-	MustConnectWithDefaults(func() error {
-		defaultLogger.Print("attempting to connect to mockserver 1...", mockServerURL)
-		_, err := http.Get(mockServerURL)
-		if err == nil {
-			wg.Done()
-			defaultLogger.Print("connected to mockserver compose1")
-		}
-		return err
-	})
+	go func() {
+		err1 := compose1.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
+			defaultLogger.Print("attempting to connect to mockserver 1...", mockServerURL)
+			_, err := http.Get(mockServerURL)
+			if err == nil {
+				wg.Done()
+				defaultLogger.Print("connected to mockserver compose1")
+			}
+			return err
+		})
+		require.NoError(t, err1)
+	}()
 
-	mockServerURL2 := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose2.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
+	go func() {
+		mockServerURL2 := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose2.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 
-	MustConnectWithDefaults(func() error {
-		defaultLogger.Print("attempting to connect to mockserver 2...", mockServerURL2)
-		_, err := http.Get(mockServerURL2)
-		if err == nil {
-			wg.Done()
-			defaultLogger.Print("connected to mockserver compose2")
-		}
-		return err
-	})
+		err2 := compose2.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
+			defaultLogger.Print("attempting to connect to mockserver 2...", mockServerURL2)
+			_, err := http.Get(mockServerURL2)
+			if err == nil {
+				wg.Done()
+				defaultLogger.Print("connected to mockserver compose2")
+			}
+			return err
+		})
+
+		require.NoError(t, err2)
+	}()
 
 	wg.Wait()
-
-}
-
-func TestComplexDepends(t *testing.T) {
-	fileOut :=
-		`
-version: '3'
-services:
-  cassandra:
-    image: cassandra:3.11
-    ports:
-    - "9042:9042"
-  statsd:
-    image: hopsoft/graphite-statsd
-    ports:
-    - "8080:80"
-    - "2003:2003"
-    - "8125:8125"
-    - "8126:8126"
-  cadence:
-    image: ubercadence/server:0.4.0
-    ports:
-    - "7933:7933"
-    - "7934:7934"
-    - "7935:7935"
-    environment:
-    - "CASSANDRA_SEEDS=cassandra"
-    - "STATSD_ENDPOINT=statsd:8125"
-    depends_on:
-    - cassandra
-    - statsd
-  cadence-web:
-    image: ubercadence/web:3.1.2
-    environment:
-    - "CADENCE_TCHANNEL_PEERS=cadence:7933"
-    ports:
-    - "8088:8088"
-    depends_on:
-    - cadence
-`
-
-	var cfg Config
-	err := yaml.Unmarshal([]byte(fileOut), &cfg)
-	require.NoError(t, err)
-
-	c := MustStart(OptionWithCompose(cfg),
-		OptionWithProjectName(t.Name()),
-		OptionWithLogger(defaultLogger),
-		OptionStartRetries(2),
-		OptionForcePull(true), OptionKeepAround(true))
-	defer c.MustCleanup()
-	require.NotNil(t, c.Containers)
 
 }

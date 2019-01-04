@@ -15,7 +15,7 @@ var dockerHostRegexp = regexp.MustCompile("://([^:]+):")
 func InferDockerHost() (string, error) {
 	envHost := os.Getenv("DOCKER_HOST")
 	if len(envHost) == 0 {
-		return "localhost", nil
+		return "127.0.0.1", nil
 	}
 
 	matches := dockerHostRegexp.FindAllStringSubmatch(envHost, -1)
