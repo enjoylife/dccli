@@ -76,6 +76,10 @@ func OptionWithCompose(o Config) Option {
 // OptionWithProjectName sets the project name to use
 func OptionWithProjectName(p string) Option {
 	return func(c *internalCFG) {
+		if p != "" {
+			// lowercases everything and strips out all underscores
+			p = strings.Replace(strings.ToLower(p), "_", "", -1)
+		}
 		c.projectName = p
 	}
 }
@@ -185,9 +189,6 @@ func Start(opts ...Option) (*Compose, error) {
 		}
 		key := container.Name[1:]
 		key = findKey(key, cmpCFG.Services)
-		//if cfg.projectName != "" {
-		//	key = strings.TrimPrefix(key, strings.ToLower(cfg.projectName)+ "_")
-		//}
 		if key == "" {
 			return nil, fmt.Errorf("compose: could not map container name: %s, to list of services", key)
 		}
@@ -225,7 +226,7 @@ func (c *Compose) Cleanup() error {
 	c.logger.Println("removing stale containers, images, volumes, and networks...")
 	// cleaning based on docker network normalization, which lowercases everything
 	// and strips out all underscores
-	netName := strings.Replace(strings.ToLower(c.projectName), "_", "", -1) + "_default"
+	netName := c.projectName + "_default"
 	return combineErr(composeKill(c.fileName, c.projectName),
 		composeRm(c.fileName, c.projectName),
 		composeRMNetwork(netName),

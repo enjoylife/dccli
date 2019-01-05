@@ -162,6 +162,13 @@ func TestMustInspect(t *testing.T) {
 	}
 }
 
+func Test_With_UnderscoreNamedTest(t *testing.T) {
+	c := MustStart(OptionWithCompose(cfg),
+		OptionWithProjectName(t.Name()),
+		OptionForcePull(true), OptionRMFirst(true))
+	defer c.MustCleanup()
+}
+
 func TestScyllaDB(t *testing.T) {
 
 	var cfgDB = Config{
