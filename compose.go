@@ -20,7 +20,9 @@ import (
 
 // Compose is the main type exported by the package, used to interact with a running Docker Compose configuration.
 type Compose struct {
-	Containers  map[string]*ContainerInfo
+	ids         []string
+	publicCfg   Config
+	containers  map[string]*ContainerInfo
 	fileName    string
 	projectName string
 	logger      *log.Logger
@@ -179,27 +181,33 @@ func Start(opts ...Option) (*Compose, error) {
 		return nil, fmt.Errorf("compose: error starting containers: %v", err)
 	}
 
-	containers := make(map[string]*ContainerInfo)
-
-	for _, id := range ids {
-		container, err := Inspect(id)
-		if err != nil {
-			return nil, err
-		}
-		if !container.State.Running {
-			return nil, fmt.Errorf("compose: container '%v' is not running", container.Name)
-		}
-		key := container.Name[1:]
-		key = findKey(key, cmpCFG.Services)
-		if key == "" {
-			return nil, fmt.Errorf("compose: could not map container name: %s, to list of services", key)
-		}
-		containers[key] = container
+	c := &Compose{fileName: fName, ids: ids, containers: make(map[string]*ContainerInfo), projectName: cfg.projectName, logger: cfg.logger, cfg: cfg, publicCfg: cmpCFG}
+	if err := c.updateContainers(); err != nil {
+		return nil, err
 	}
-	c := &Compose{fileName: fName, Containers: containers, projectName: cfg.projectName, logger: cfg.logger, cfg: cfg}
 	c.logger.Println("done initializing...")
 
 	return c, nil
+}
+
+func (c *Compose) updateContainers() error {
+
+	for _, id := range c.ids {
+		container, err := Inspect(id)
+		if err != nil {
+			return err
+		}
+		//if !container.State.Running {
+		//	c.logger.Printf("compose: container '%v' is not yet running\n", container.Name)
+		//}
+		key := container.Name[1:]
+		key = findKey(key, c.publicCfg.Services)
+		if key == "" {
+			return fmt.Errorf("compose: could not map key: %s, to list of services", key)
+		}
+		c.containers[key] = container
+	}
+	return nil
 }
 
 func findKey(dockerName string, serviceNames map[string]Service) string {
@@ -218,6 +226,17 @@ func MustStart(opts ...Option) *Compose {
 		panic(err)
 	}
 	return compose
+}
+
+func (c *Compose) GetContainer(key string) (*ContainerInfo, error) {
+	if err := c.updateContainers(); err != nil {
+		return nil, err
+	}
+	i, ok := c.containers[key]
+	if !ok {
+		return nil, fmt.Errorf("no container %s found", key)
+	}
+	return i, nil
 }
 
 // Cleanup will try and kill then remove any running containers for the current configuration.

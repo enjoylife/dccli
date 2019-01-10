@@ -52,12 +52,12 @@ func TestGoodYML(t *testing.T) {
 		OptionStartRetries(2),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
-	require.NotNil(t, c.Containers)
-	if c.Containers["ms"].Name != "/testgoodyml_ms_1" {
-		t.Errorf("found name '%v', expected '/ms", c.Containers["ms"].Name)
+	require.NotNil(t, c.containers)
+	if c.containers["ms"].Name != "/testgoodyml_ms_1" {
+		t.Errorf("found name '%v', expected '/ms", c.containers["ms"].Name)
 	}
-	if c.Containers["mysql"].Name != "/testgoodyml_mysql_1" {
-		t.Errorf("found name '%v', expected '/mysql", c.Containers["mysql"].Name)
+	if c.containers["mysql"].Name != "/testgoodyml_mysql_1" {
+		t.Errorf("found name '%v', expected '/mysql", c.containers["mysql"].Name)
 	}
 	//if port := compose.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"); port != 10000 {
 	//	t.Fatalf("found port %v, expected 10000", port)
@@ -96,9 +96,9 @@ func TestMustConnectWithDefaults(t *testing.T) {
 	c := MustStart(OptionWithCompose(usedCFG),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
-	require.NotNil(t, c.Containers)
-	require.NotNil(t, c.Containers["ms"])
-	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
+	require.NotNil(t, c.containers)
+	require.NotNil(t, c.containers["ms"])
+	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 	err := c.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
 		defaultLogger.Print("attempting to connect to mockserver...", mockServerURL)
 		_, err := http.Get(mockServerURL)
@@ -116,7 +116,7 @@ func TestPolicyBadConnect(t *testing.T) {
 	defer c.MustCleanup()
 
 	//mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
-	badMockServerURL := fmt.Sprintf("http://%v/:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(1090, "tcp"))
+	badMockServerURL := fmt.Sprintf("http://%v/:%v", MustInferDockerHost(), c.containers["ms"].MustGetFirstPublicPort(1090, "tcp"))
 
 	retries := 3
 	actualTries := 0
@@ -156,10 +156,20 @@ func TestMustInspect(t *testing.T) {
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
 
-	ms := MustInspect(c.Containers["ms"].ID)
+	ms := MustInspect(c.containers["ms"].ID)
 	if ms.Name != "/dccli_ms_1" {
 		t.Errorf("found '%v', expected '/dccli_ms_1", ms.Name)
 	}
+}
+
+func TestGetContainer(t *testing.T) {
+	c := MustStart(OptionWithCompose(cfg),
+		OptionForcePull(true), OptionRMFirst(true))
+	defer c.MustCleanup()
+
+	ct, err := c.GetContainer("ms")
+	require.NoError(t, err)
+	require.NotNil(t, ct)
 }
 
 func Test_With_UnderscoreNamedTest(t *testing.T) {
@@ -188,7 +198,7 @@ func TestScyllaDB(t *testing.T) {
 						Condition:   "on-failure",
 						Delay:       "5s",
 						MaxAttempts: 3,
-						Window:      "120ss",
+						Window:      "120s",
 					},
 				},
 			},
@@ -209,7 +219,7 @@ func TestScyllaDB(t *testing.T) {
 		b.Keyspace = "system"
 		b.DisableInitialHostLookup = true
 		b.Compressor = &gocql.SnappyCompressor{}
-		b.Port = int(c.Containers["scylla"].MustGetFirstPublicPort(9042, "tcp"))
+		b.Port = int(c.containers["scylla"].MustGetFirstPublicPort(9042, "tcp"))
 
 		_, err := b.CreateSession()
 		return err
@@ -231,7 +241,7 @@ func TestParallelMustConnectWithDefaults(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
-	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose1.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
+	mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose1.containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 
 	go func() {
 		err1 := compose1.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
@@ -247,7 +257,7 @@ func TestParallelMustConnectWithDefaults(t *testing.T) {
 	}()
 
 	go func() {
-		mockServerURL2 := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose2.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
+		mockServerURL2 := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), compose2.containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
 
 		err2 := compose2.Connect(NewSimpleRetryPolicy(3, time.Second), func() error {
 			defaultLogger.Print("attempting to connect to mockserver 2...", mockServerURL2)
