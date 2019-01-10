@@ -170,7 +170,6 @@ func Test_With_UnderscoreNamedTest(t *testing.T) {
 }
 
 func TestScyllaDB(t *testing.T) {
-
 	var cfgDB = Config{
 		Version: "3.7",
 		Services: map[string]Service{
@@ -182,6 +181,14 @@ func TestScyllaDB(t *testing.T) {
 					{
 						Target: "/var/lib/scylla/",
 						Type:   "tmpfs",
+					},
+				},
+				Deploy: map[string]interface{}{
+					"restart_policy": RestartPolicy{
+						Condition:   "on-failure",
+						Delay:       "5s",
+						MaxAttempts: 3,
+						Window:      "120ss",
 					},
 				},
 			},

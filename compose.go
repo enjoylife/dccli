@@ -140,6 +140,8 @@ func Start(opts ...Option) (*Compose, error) {
 		return nil, err
 	}
 
+	cfg.logger.Printf("creating docker-compose.yaml, file: %s", fName)
+
 	if cfg.forcePull {
 		cfg.logger.Println("pulling images...")
 		if _, err := composeRun(fName, cfg.projectName, "pull"); err != nil {

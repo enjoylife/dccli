@@ -6,16 +6,18 @@ import (
 )
 
 type Config struct {
-	Version  string                 `yaml:"version,omitempty"`
-	Networks map[string]*Network    `yaml:"networks,omitempty"`
-	Volumes  map[string]interface{} `yaml:"volumes,omitempty"`
-	Services map[string]Service     `yaml:"services,omitempty"`
+	Version   string                 `yaml:"version,omitempty"`
+	Networks  map[string]*Network    `yaml:"networks,omitempty"`
+	Volumes   map[string]interface{} `yaml:"volumes,omitempty"`
+	Services  map[string]Service     `yaml:"services,omitempty"`
+	Extension map[string]interface{} `yaml:",inline,omitempty"`
 }
 
 type Network struct {
 	Driver   string
 	External string
 	//DriverOpts map[string]string "driver_opts"
+	Extension map[string]interface{} `yaml:",inline,omitempty"`
 }
 
 type Volume struct {
@@ -73,13 +75,22 @@ type Service struct {
 	Entrypoint string   `yaml:"entrypoint,omitempty"`
 	Networks   []string `yaml:"networks,omitempty"`
 	//Expose        []string    `yaml:"expose,omitempty"`
-	Hostname    string      `yaml:"hostname,omitempty"`
-	Ports       []string    `yaml:"ports,omitempty"`
-	Volumes     []*Volume   `yaml:"volumes,omitempty"`
-	Command     []string    `yaml:"command,omitempty"`
-	HealthCheck HealthCheck `yaml:"healthcheck,omitempty"`
-	DependsOn   []string    `yaml:"depends_on,omitempty"`
-	Environment []string    `yaml:"environment,omitempty"`
+	Hostname    string                 `yaml:"hostname,omitempty"`
+	Ports       []string               `yaml:"ports,omitempty"`
+	Volumes     []*Volume              `yaml:"volumes,omitempty"`
+	Command     []string               `yaml:"command,omitempty"`
+	HealthCheck HealthCheck            `yaml:"healthcheck,omitempty"`
+	DependsOn   []string               `yaml:"depends_on,omitempty"`
+	Environment []string               `yaml:"environment,omitempty"`
+	Deploy      map[string]interface{} `yaml:"deploy,omitempty"`
+	Extension   map[string]interface{} `yaml:",inline,omitempty"`
+}
+
+type RestartPolicy struct {
+	Condition   string `yaml:"condition,omitempty"`
+	Delay       string `yaml:"delay,omitempty"`
+	MaxAttempts int    `yaml:"max_attempts,omitempty"`
+	Window      string `yaml:"window,omitempty"`
 }
 
 type HealthCheck struct {
