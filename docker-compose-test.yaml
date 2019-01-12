@@ -1,0 +1,22 @@
+version: "3"
+services:
+  ms:
+    image: ubuntu:trusty
+    ports:
+    - "3000"
+    - "1090"
+    command:
+    - python3
+    - -c
+    - "import sys\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nPORT
+      = 3000\nclass HelloWorld(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(200)\n
+      \       self.send_header(\"Content-type\",\"text/plain\")\n        self.end_headers()\n
+      \n        self.wfile.write(bytes(\"Hello world!\", \"utf8\"))\n        return\nhttpd
+      = HTTPServer((\"\", PORT), HelloWorld)\nprint(\"serving at port\", PORT)\nsys.stdout.flush()\nhttpd.serve_forever()\n"
+  mysql:
+    image: mysql:5.7
+    ports:
+    - "3306"
+    environment:
+    - MYSQL_ROOT_PASSWORD=root
+    - MYSQL_DATABASE=test

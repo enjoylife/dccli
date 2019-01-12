@@ -175,6 +175,7 @@ func TestGetContainer(t *testing.T) {
 func Test_With_UnderscoreNamedTest(t *testing.T) {
 	c := MustStart(OptionWithCompose(cfg),
 		OptionWithProjectName(t.Name()),
+		OptionWriteToFile("docker-compose-test.yaml"),
 		OptionForcePull(true), OptionRMFirst(true))
 	defer c.MustCleanup()
 }

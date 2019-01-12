@@ -35,7 +35,7 @@ func MustInferDockerHost() string {
 }
 
 func writeTmp(content string) (string, error) {
-	f, err := ioutil.TempFile("", "docker-compose-")
+	f, err := ioutil.TempFile("", "docker-compose-*.yaml")
 	if err != nil {
 		return "", fmt.Errorf("compose: error creating temp file: %v", err)
 	}

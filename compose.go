@@ -30,7 +30,7 @@ type Compose struct {
 }
 
 var (
-	defaultLogger   = log.New(os.Stdout, "compose: ", log.LstdFlags|log.Lshortfile)
+	defaultLogger   = log.New(os.Stdout, "[dccli] ", log.LstdFlags|log.Lshortfile)
 	composeUpRegexp = regexp.MustCompile(`(?m)docker start|inspect_container <-.*\(u?'(.*)'\)`)
 )
 
@@ -42,6 +42,7 @@ type internalCFG struct {
 	logger       *log.Logger
 	connectTries int
 	keeparound   bool
+	outFile      string
 }
 
 // Option is the type used for defining optional configuration
@@ -100,6 +101,12 @@ func OptionStartRetries(count int) Option {
 	}
 }
 
+func OptionWriteToFile(path string) Option {
+	return func(c *internalCFG) {
+		c.outFile = path
+	}
+}
+
 // Start starts a Docker Compose configuration.
 // TODO(mclemens) accept an io.Reader or a set of options
 func Start(opts ...Option) (*Compose, error) {
@@ -137,33 +144,48 @@ func Start(opts ...Option) (*Compose, error) {
 		return nil, err
 	}
 	fileStr := string(bsMod)
-	fName, err := writeTmp(fileStr)
-	if err != nil {
-		return nil, err
+
+	// use given file if provided
+	if cfg.outFile != "" {
+		f, err := os.Create(cfg.outFile)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		_, err = f.WriteString(fileStr)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		cfg.outFile, err = writeTmp(fileStr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	cfg.logger.Printf("creating docker-compose.yaml, file: %s", fName)
+	cfg.logger.Printf("wrote docker-compose.yaml configuration to file: %s", cfg.outFile)
 
 	if cfg.forcePull {
 		cfg.logger.Println("pulling images...")
-		if _, err := composeRun(fName, cfg.projectName, "pull"); err != nil {
+		if _, err := composeRun(cfg.outFile, cfg.projectName, "pull"); err != nil {
 			return nil, fmt.Errorf("compose: error pulling images: %v", err)
 		}
 	}
 
 	if cfg.rmFirst {
-		if err := composeKill(fName, cfg.projectName); err != nil {
+		cfg.logger.Println("killing and removing images...")
+		if err := composeKill(cfg.outFile, cfg.projectName); err != nil {
 			return nil, err
 		}
-		if err := composeRm(fName, cfg.projectName); err != nil {
+		if err := composeRm(cfg.outFile, cfg.projectName); err != nil {
 			return nil, err
 		}
 	}
 
-	cfg.logger.Println("starting containers...")
 	var ids []string
 	err = connect(cfg.connectTries, time.Second*2, func() error {
-		out, err := composeRun(fName, cfg.projectName, "--verbose", "up", "-d")
+		out, err := composeRun(cfg.outFile, cfg.projectName, "--verbose", "up", "-d")
 		if err != nil {
 			return err
 		}
@@ -181,11 +203,21 @@ func Start(opts ...Option) (*Compose, error) {
 		return nil, fmt.Errorf("compose: error starting containers: %v", err)
 	}
 
-	c := &Compose{fileName: fName, ids: ids, containers: make(map[string]*ContainerInfo), projectName: cfg.projectName, logger: cfg.logger, cfg: cfg, publicCfg: cmpCFG}
+	c := &Compose{fileName: cfg.outFile, ids: ids, containers: make(map[string]*ContainerInfo), projectName: cfg.projectName, logger: cfg.logger, cfg: cfg, publicCfg: cmpCFG}
 	if err := c.updateContainers(); err != nil {
 		return nil, err
 	}
+
+	var containerNames []string
+	for k := range c.containers {
+		containerNames = append(containerNames, k)
+	}
+
 	c.logger.Println("done initializing...")
+	c.logger.Printf("Tail logs via: docker-compose -p %s -f %s logs -f %s\n",
+		cfg.projectName,
+		cfg.outFile,
+		strings.Join(containerNames, " "))
 
 	return c, nil
 }
