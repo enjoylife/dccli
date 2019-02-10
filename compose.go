@@ -183,7 +183,16 @@ func Start(opts ...Option) (*Compose, error) {
 		}
 	}
 
-	var ids []string
+	c := &Compose{
+		ids:         nil, // will be filled in via connect
+		publicCfg:   cmpCFG,
+		containers:  make(map[string]*ContainerInfo),
+		fileName:    cfg.outFile,
+		projectName: cfg.projectName,
+		logger:      cfg.logger,
+		cfg:         cfg,
+	}
+
 	err = connect(cfg.connectTries, time.Second*2, func() error {
 		out, err := composeRun(cfg.outFile, cfg.projectName, "--verbose", "up", "-d")
 		if err != nil {
@@ -192,20 +201,23 @@ func Start(opts ...Option) (*Compose, error) {
 		cfg.logger.Println("containers started")
 
 		matches := composeUpRegexp.FindAllStringSubmatch(out, -1)
+		var ids []string
 		for _, match := range matches {
 			if match[1] != "" {
 				ids = append(ids, match[1])
 			}
 		}
+		c.ids = ids
+
+		if err := c.updateContainers(); err != nil {
+			cfg.logger.Printf("retrying after: %s\n", err)
+			return err
+		}
+
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose: error starting containers: %v", err)
-	}
-
-	c := &Compose{fileName: cfg.outFile, ids: ids, containers: make(map[string]*ContainerInfo), projectName: cfg.projectName, logger: cfg.logger, cfg: cfg, publicCfg: cmpCFG}
-	if err := c.updateContainers(); err != nil {
-		return nil, err
 	}
 
 	var containerNames []string
@@ -235,7 +247,7 @@ func (c *Compose) updateContainers() error {
 		key := container.Name[1:]
 		key = findKey(key, c.publicCfg.Services)
 		if key == "" {
-			return fmt.Errorf("compose: could not map key: %s, to list of services", key)
+			return fmt.Errorf("could not map key: %s, to list of services", key)
 		}
 		c.containers[key] = container
 	}
