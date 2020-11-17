@@ -1,5 +1,7 @@
 module github.com/enjoylife/dccli
 
+go 1.15
+
 require (
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect

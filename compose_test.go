@@ -50,7 +50,7 @@ func TestGoodYML(t *testing.T) {
 		OptionWithProjectName("TestGoodYML"),
 		OptionWithLogger(defaultLogger),
 		OptionStartRetries(2),
-		OptionForcePull(true), OptionRMFirst(true))
+		OptionForcePull(false), OptionRMFirst(false))
 	defer c.MustCleanup()
 	require.NotNil(t, c.containers)
 	if c.containers["ms"].Name != "/testgoodyml_ms_1" {
@@ -93,8 +93,7 @@ func TestMustInferDockerHost(t *testing.T) {
 
 func TestMustConnectWithDefaults(t *testing.T) {
 	usedCFG := cfg
-	c := MustStart(OptionWithCompose(usedCFG),
-		OptionForcePull(true), OptionRMFirst(true))
+	c := MustStart(OptionWithCompose(usedCFG))
 	defer c.MustCleanup()
 	require.NotNil(t, c.containers)
 	require.NotNil(t, c.containers["ms"])
@@ -111,8 +110,7 @@ func TestMustConnectWithDefaults(t *testing.T) {
 }
 
 func TestPolicyBadConnect(t *testing.T) {
-	c := MustStart(OptionWithCompose(cfg),
-		OptionForcePull(true), OptionRMFirst(true))
+	c := MustStart(OptionWithCompose(cfg))
 	defer c.MustCleanup()
 
 	//mockServerURL := fmt.Sprintf("http://%v:%v", MustInferDockerHost(), c.Containers["ms"].MustGetFirstPublicPort(3000, "tcp"))
@@ -152,8 +150,7 @@ func TestInspectUnknownContainer(t *testing.T) {
 }
 
 func TestMustInspect(t *testing.T) {
-	c := MustStart(OptionWithCompose(cfg),
-		OptionForcePull(true), OptionRMFirst(true))
+	c := MustStart(OptionWithCompose(cfg))
 	defer c.MustCleanup()
 
 	ms := MustInspect(c.containers["ms"].ID)
@@ -163,8 +160,7 @@ func TestMustInspect(t *testing.T) {
 }
 
 func TestGetContainer(t *testing.T) {
-	c := MustStart(OptionWithCompose(cfg),
-		OptionForcePull(true), OptionRMFirst(true))
+	c := MustStart(OptionWithCompose(cfg))
 	defer c.MustCleanup()
 
 	ct, err := c.GetContainer("ms")
@@ -175,8 +171,7 @@ func TestGetContainer(t *testing.T) {
 func Test_With_UnderscoreNamedTest(t *testing.T) {
 	c := MustStart(OptionWithCompose(cfg),
 		OptionWithProjectName(t.Name()),
-		OptionWriteToFile("docker-compose-test.yaml"),
-		OptionForcePull(true), OptionRMFirst(true))
+		OptionWriteToFile("docker-compose-test.yaml"))
 	defer c.MustCleanup()
 }
 
@@ -206,8 +201,7 @@ func TestScyllaDB(t *testing.T) {
 		},
 	}
 
-	c := MustStart(OptionWithCompose(cfgDB),
-		OptionForcePull(true), OptionRMFirst(true))
+	c := MustStart(OptionWithCompose(cfgDB))
 	defer c.MustCleanup()
 
 	err := c.Connect(&SimpleRetryPolicy{
@@ -233,11 +227,9 @@ func TestScyllaDB(t *testing.T) {
 
 func TestParallelMustConnectWithDefaults(t *testing.T) {
 
-	compose1 := MustStart(OptionWithCompose(cfg), OptionWithProjectName("compose1"),
-		OptionForcePull(true), OptionRMFirst(true))
+	compose1 := MustStart(OptionWithCompose(cfg), OptionWithProjectName("compose1"))
 	defer compose1.MustCleanup()
-	compose2 := MustStart(OptionWithCompose(cfg), OptionWithProjectName("compose2"),
-		OptionForcePull(true), OptionRMFirst(true))
+	compose2 := MustStart(OptionWithCompose(cfg), OptionWithProjectName("compose2"))
 	defer compose2.MustCleanup()
 	wg := sync.WaitGroup{}
 	wg.Add(2)

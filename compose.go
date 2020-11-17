@@ -42,6 +42,7 @@ type internalCFG struct {
 	logger       *log.Logger
 	connectTries int
 	keeparound   bool
+	preventStop  bool
 	outFile      string
 }
 
@@ -66,6 +67,13 @@ func OptionRMFirst(b bool) Option {
 func OptionKeepAround(b bool) Option {
 	return func(c *internalCFG) {
 		c.keeparound = b
+	}
+}
+
+// If OptionPreventStop is true, it will not stop the containers during cleanup
+func OptionPreventStop(b bool) Option {
+	return func(c *internalCFG) {
+		c.preventStop = b
 	}
 }
 
@@ -174,6 +182,7 @@ func Start(opts ...Option) (*Compose, error) {
 	}
 
 	if cfg.rmFirst {
+		cfg.logger.Println("WARN: OptionRMFirst is slow and wasteful, don't use it.")
 		cfg.logger.Println("killing and removing images...")
 		if err := composeKill(cfg.outFile, cfg.projectName); err != nil {
 			return nil, err
@@ -285,16 +294,21 @@ func (c *Compose) GetContainer(key string) (*ContainerInfo, error) {
 
 // Cleanup will try and kill then remove any running containers for the current configuration.
 func (c *Compose) Cleanup() error {
+	if !c.cfg.preventStop {
+		if err := composeStop(c.fileName, c.projectName); err != nil {
+			return err
+		}
+	}
 	if c.cfg.keeparound {
 		return nil
 	}
+
 	c.logger.Println("removing stale containers, images, volumes, and networks...")
 	// cleaning based on docker network normalization, which lowercases everything
 	// and strips out all underscores
-	netName := c.projectName + "_default"
+	//netName := c.projectName + "_default"
 	return combineErr(composeKill(c.fileName, c.projectName),
-		composeRm(c.fileName, c.projectName),
-		composeRMNetwork(netName),
+		composeDown(c.fileName, c.projectName),
 		dockerPrune())
 }
 
@@ -370,9 +384,25 @@ func composeKill(fName string, pName string) error {
 }
 
 func composeRm(fName string, pName string) error {
-	out, err := composeRun(fName, pName, "rm", "--force")
+	out, err := composeRun(fName, pName, "rm", "--force", "-v")
 	if err != nil {
 		return fmt.Errorf("compose: error removing stale containers: %s, %v", out, err)
+	}
+	return nil
+}
+
+func composeStop(fName string, pName string) error {
+	out, err := composeRun(fName, pName, "stop")
+	if err != nil {
+		return fmt.Errorf("compose: error stopping stale containers: %s, %v", out, err)
+	}
+	return nil
+}
+
+func composeDown(fName string, pName string) error {
+	out, err := composeRun(fName, pName, "down", "-v", "--remove-orphans")
+	if err != nil {
+		return fmt.Errorf("compose: error downing stale containers: %s, %v", out, err)
 	}
 	return nil
 }
