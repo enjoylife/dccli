@@ -347,6 +347,11 @@ func runCmd(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &outBuf
+	// We need to prevent ctrl-c in the parent process from
+	// prematurely killing the docker command
+	// See https://stackoverflow.com/a/33171307/1403990
+	AssignProcAttr(cmd)
+
 	cmdErr := cmd.Run()
 	out := outBuf.String()
 	if cmdErr == nil {
